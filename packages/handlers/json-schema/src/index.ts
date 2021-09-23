@@ -4,11 +4,15 @@ import { SchemaComposer } from 'graphql-compose';
 import { specifiedDirectives } from 'graphql';
 import { JsonSchemaWithDiff } from './JsonSchemaWithDiff';
 import { dereferenceObject, JSONSchema, JSONSchemaObject } from 'json-machete';
-import { getComposerFromJSONSchema } from './getComposerFromJSONSchema';
-import { JSONSchemaLoader, JSONSchemaLoaderOptions, JSONSchemaOperationConfig } from './JSONSchemaLoader';
+import {
+  getComposerFromJSONSchema,
+  buildFinalJSONSchema,
+  JSONSchemaLoaderOptions,
+  JSONSchemaOperationConfig,
+  addExecutionLogicToComposer,
+} from '@omnigraphql/json-schema';
 
 export default class JsonSchemaHandler implements MeshHandler {
-  private name: string;
   private config: YamlConfig.JsonSchemaHandler;
   private baseDir: string;
   public cache: KeyValueCache<any>;
@@ -16,16 +20,7 @@ export default class JsonSchemaHandler implements MeshHandler {
   public jsonSchema: StoreProxy<JSONSchemaObject>;
   private logger: Logger;
 
-  constructor({
-    name,
-    config,
-    baseDir,
-    cache,
-    pubsub,
-    store,
-    logger,
-  }: GetMeshSourceOptions<YamlConfig.JsonSchemaHandler>) {
-    this.name = name;
+  constructor({ config, baseDir, cache, pubsub, store, logger }: GetMeshSourceOptions<YamlConfig.JsonSchemaHandler>) {
     this.config = config;
     this.baseDir = baseDir;
     this.cache = cache;
@@ -35,9 +30,7 @@ export default class JsonSchemaHandler implements MeshHandler {
   }
 
   async getMeshSource() {
-    const jsonSchemaLoader = new JSONSchemaLoader();
     const options: JSONSchemaLoaderOptions = {
-      name: this.name,
       baseUrl: this.config.baseUrl,
       operationHeaders: this.config.operationHeaders,
       schemaHeaders: this.config.schemaHeaders,
@@ -48,7 +41,7 @@ export default class JsonSchemaHandler implements MeshHandler {
       cache: this.cache,
       cwd: this.baseDir,
     };
-    const finalJSONSchema = await this.jsonSchema.getWithSet(() => jsonSchemaLoader.buildFinalJSONSchema(options));
+    const finalJSONSchema = await this.jsonSchema.getWithSet(() => buildFinalJSONSchema(options));
     this.logger.debug(`Derefering the bundled JSON Schema`);
     const fullyDeferencedSchema = await dereferenceObject(finalJSONSchema, {
       cwd: this.baseDir,
@@ -61,7 +54,7 @@ export default class JsonSchemaHandler implements MeshHandler {
     // graphql-compose doesn't add @defer and @stream to the schema
     specifiedDirectives.forEach(directive => schemaComposer.addDirective(directive));
 
-    jsonSchemaLoader.addExecutionLogicToComposer(schemaComposer, options);
+    addExecutionLogicToComposer(schemaComposer, options);
 
     return {
       schema: schemaComposer.buildSchema(),

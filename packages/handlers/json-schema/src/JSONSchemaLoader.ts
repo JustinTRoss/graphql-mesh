@@ -62,6 +62,11 @@ export interface JSONSchemaLoaderOptions extends BaseLoaderOptions {
   pubsub?: MeshPubSub;
 }
 
+export const loadJSONSchema = (pointer: 'jsonSchema', options: JSONSchemaLoaderOptions) => {
+  const jsonSchemaLoader = new JSONSchemaLoader();
+  return jsonSchemaLoader.load(pointer, options);
+};
+
 export class JSONSchemaLoader implements Loader<JSONSchemaLoaderOptions> {
   async load(pointer: 'jsonSchema', options: JSONSchemaLoaderOptions): Promise<Source[]> {
     if (pointer !== 'jsonSchema') {

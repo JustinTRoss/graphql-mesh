@@ -54,8 +54,7 @@ export async function readFile<T>(filePath: string, config?: ReadFileOrUrlOption
       case 'js':
         return import(filePath).then(m => m.default || m);
     }
-  }
-  if (!allowUnknownExtensions) {
+  } else if (!allowUnknownExtensions) {
     throw new Error(
       `Failed to parse JSON/YAML. Ensure file '${filePath}' has ` +
         `the correct extension (i.e. '.json', '.yaml', or '.yml).`

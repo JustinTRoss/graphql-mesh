@@ -1,26 +1,14 @@
 import { StoreProxy } from '@graphql-mesh/store';
 import { GetMeshSourceOptions, KeyValueCache, Logger, MeshHandler, MeshPubSub, YamlConfig } from '@graphql-mesh/types';
-import {
-  jsonFlatStringify,
-  parseInterpolationStrings,
-  stringInterpolator,
-  readFileOrUrl,
-  getCachedFetch,
-  AggregateError,
-} from '@graphql-mesh/utils';
 import { SchemaComposer } from 'graphql-compose';
-import toJsonSchema from 'to-json-schema';
-import { stringify as qsStringify } from 'qs';
-import urlJoin from 'url-join';
-import { isScalarType, specifiedDirectives } from 'graphql';
+import { specifiedDirectives } from 'graphql';
 import { JsonSchemaWithDiff } from './JsonSchemaWithDiff';
-import { inspect } from '@graphql-tools/utils';
-import { dereferenceObject, healJSONSchema, referenceJSONSchema, JSONSchema, JSONSchemaObject } from 'json-machete';
+import { dereferenceObject, JSONSchema, JSONSchemaObject } from 'json-machete';
 import { getComposerFromJSONSchema } from './getComposerFromJSONSchema';
-import { env } from 'process';
-import { resolveDataByUnionInputType } from './resolveDataByUnionInputType';
+import { JSONSchemaLoader, JSONSchemaLoaderOptions, JSONSchemaOperationConfig } from './JSONSchemaLoader';
 
 export default class JsonSchemaHandler implements MeshHandler {
+  private name: string;
   private config: YamlConfig.JsonSchemaHandler;
   private baseDir: string;
   public cache: KeyValueCache<any>;
@@ -28,7 +16,16 @@ export default class JsonSchemaHandler implements MeshHandler {
   public jsonSchema: StoreProxy<JSONSchemaObject>;
   private logger: Logger;
 
-  constructor({ config, baseDir, cache, pubsub, store, logger }: GetMeshSourceOptions<YamlConfig.JsonSchemaHandler>) {
+  constructor({
+    name,
+    config,
+    baseDir,
+    cache,
+    pubsub,
+    store,
+    logger,
+  }: GetMeshSourceOptions<YamlConfig.JsonSchemaHandler>) {
+    this.name = name;
     this.config = config;
     this.baseDir = baseDir;
     this.cache = cache;
@@ -38,102 +35,22 @@ export default class JsonSchemaHandler implements MeshHandler {
   }
 
   async getMeshSource() {
-    const cachedJsonSchema = await this.jsonSchema.getWithSet(async () => {
-      const finalJsonSchema: JSONSchema = {
-        type: 'object',
-        title: '_schema',
-        properties: {},
-        required: ['query'],
-      };
-      for (const operationConfig of this.config.operations) {
-        operationConfig.method = operationConfig.method || (operationConfig.type === 'Mutation' ? 'POST' : 'GET');
-        operationConfig.type = operationConfig.type || (operationConfig.method === 'GET' ? 'Query' : 'Mutation');
-        const rootTypePropertyName = operationConfig.type.toLowerCase();
-        const rootTypeDefinition = (finalJsonSchema.properties[rootTypePropertyName] = finalJsonSchema.properties[
-          rootTypePropertyName
-        ] || {
-          type: 'object',
-          title: operationConfig.type,
-          properties: {},
-        });
-        rootTypeDefinition.properties = rootTypeDefinition.properties || {};
-        if (operationConfig.responseSchema) {
-          rootTypeDefinition.properties[operationConfig.field] = {
-            $ref: operationConfig.responseSchema,
-          };
-        } else if (operationConfig.responseSample) {
-          const sample = await readFileOrUrl(operationConfig.responseSample, {
-            cwd: this.baseDir,
-          }).catch(e => {
-            throw new Error(`responseSample - ${e.message}`);
-          });
-          const generatedSchema = toJsonSchema(sample, {
-            required: false,
-            objects: {
-              additionalProperties: false,
-            },
-            strings: {
-              detectFormat: true,
-            },
-            arrays: {
-              mode: 'first',
-            },
-          });
-          generatedSchema.title = operationConfig.responseTypeName;
-          rootTypeDefinition.properties[operationConfig.field] = generatedSchema;
-        } else {
-          const generatedSchema: JSONSchemaObject = {
-            type: 'object',
-          };
-          generatedSchema.title = operationConfig.responseTypeName;
-          rootTypeDefinition.properties[operationConfig.field] = generatedSchema;
-        }
-
-        const rootTypeInputPropertyName = operationConfig.type.toLowerCase() + 'Input';
-        const rootTypeInputTypeDefinition = (finalJsonSchema.properties[rootTypeInputPropertyName] = finalJsonSchema
-          .properties[rootTypeInputPropertyName] || {
-          type: 'object',
-          title: operationConfig.type + 'Input',
-          properties: {},
-        });
-        if (operationConfig.requestSchema) {
-          rootTypeInputTypeDefinition.properties[operationConfig.field] = {
-            $ref: operationConfig.requestSchema,
-          };
-        } else if (operationConfig.requestSample) {
-          const sample = await readFileOrUrl(operationConfig.requestSample, {
-            cwd: this.baseDir,
-          }).catch(e => {
-            throw new Error(`requestSample:${operationConfig.requestSample} cannot be read - ${e.message}`);
-          });
-          const generatedSchema = toJsonSchema(sample, {
-            required: false,
-            objects: {
-              additionalProperties: false,
-            },
-            strings: {
-              detectFormat: true,
-            },
-            arrays: {
-              mode: 'first',
-            },
-          });
-          generatedSchema.title = operationConfig.requestTypeName;
-          rootTypeInputTypeDefinition.properties[operationConfig.field] = generatedSchema;
-        }
-      }
-      this.logger.debug(`Dereferencing JSON Schema to resolve all $refs`);
-      const fullyDeferencedSchema = await dereferenceObject(finalJsonSchema, {
-        cwd: this.baseDir,
-      });
-      this.logger.debug(`Healing JSON Schema`);
-      const healedSchema = await healJSONSchema(fullyDeferencedSchema);
-      this.logger.debug(`Building and mapping $refs back to JSON Schema`);
-      const fullyReferencedSchema = await referenceJSONSchema(healedSchema as any);
-      return fullyReferencedSchema;
-    });
+    const jsonSchemaLoader = new JSONSchemaLoader();
+    const options: JSONSchemaLoaderOptions = {
+      name: this.name,
+      baseUrl: this.config.baseUrl,
+      operationHeaders: this.config.operationHeaders,
+      schemaHeaders: this.config.schemaHeaders,
+      operations: this.config.operations as unknown as JSONSchemaOperationConfig[],
+      disableTimestampScalar: this.config.disableTimestampScalar,
+      errorMessage: this.config.errorMessage,
+      logger: this.logger,
+      cache: this.cache,
+      cwd: this.baseDir,
+    };
+    const finalJSONSchema = await this.jsonSchema.getWithSet(() => jsonSchemaLoader.buildFinalJSONSchema(options));
     this.logger.debug(`Derefering the bundled JSON Schema`);
-    const fullyDeferencedSchema = await dereferenceObject(cachedJsonSchema, {
+    const fullyDeferencedSchema = await dereferenceObject(finalJSONSchema, {
       cwd: this.baseDir,
     });
     this.logger.debug(`Generating GraphQL Schema from the bundled JSON Schema`);
@@ -144,166 +61,10 @@ export default class JsonSchemaHandler implements MeshHandler {
     // graphql-compose doesn't add @defer and @stream to the schema
     specifiedDirectives.forEach(directive => schemaComposer.addDirective(directive));
 
-    const contextVariables: string[] = [];
+    jsonSchemaLoader.addExecutionLogicToComposer(schemaComposer, options);
 
-    const fetch = getCachedFetch(this.cache);
-
-    this.logger.debug(`Attaching execution logic to the schema`);
-    for (const operationConfig of this.config.operations) {
-      operationConfig.method = operationConfig.method || (operationConfig.type === 'Mutation' ? 'POST' : 'GET');
-      operationConfig.type = operationConfig.type || (operationConfig.method === 'GET' ? 'Query' : 'Mutation');
-      const operationLogger = this.logger.child(`${operationConfig.type}.${operationConfig.field}`);
-      const { args, contextVariables: specificContextVariables } = parseInterpolationStrings(
-        [
-          ...Object.values(this.config.operationHeaders || {}),
-          ...Object.values(operationConfig.headers || {}),
-          operationConfig.path,
-          this.config.baseUrl,
-        ],
-        operationConfig.argTypeMap
-      );
-
-      contextVariables.push(...specificContextVariables);
-
-      const rootTypeComposer = schemaComposer[operationConfig.type];
-
-      rootTypeComposer.addFieldArgs(operationConfig.field, args);
-
-      const field = rootTypeComposer.getField(operationConfig.field);
-      if (!field.description) {
-        field.description = operationConfig.path
-          ? `${operationConfig.method} ${operationConfig.path}`
-          : operationConfig.pubsubTopic
-          ? `PubSub Topic: ${operationConfig.pubsubTopic}`
-          : '';
-      }
-
-      if (operationConfig.pubsubTopic) {
-        field.subscribe = (root, args, context, info) => {
-          const interpolationData = { root, args, context, info, env };
-          const pubsubTopic = stringInterpolator.parse(operationConfig.pubsubTopic, interpolationData);
-          operationLogger.debug(`=> Subscribing to pubSubTopic: ${pubsubTopic}`);
-          return this.pubsub.asyncIterator(pubsubTopic);
-        };
-        field.resolve = root => {
-          operationLogger.debug(`Received ${inspect(root)} from ${operationConfig.pubsubTopic}`);
-          return root;
-        };
-      } else if (operationConfig.path) {
-        field.resolve = async (root, args, context, info) => {
-          operationLogger.debug(`=> Resolving`);
-          const interpolationData = { root, args, context, info, env };
-          const interpolatedBaseUrl = stringInterpolator.parse(this.config.baseUrl, interpolationData);
-          const interpolatedPath = stringInterpolator.parse(operationConfig.path, interpolationData);
-          const fullPath = urlJoin(interpolatedBaseUrl, interpolatedPath);
-          const method = operationConfig.method;
-          const headers = {
-            ...this.config.operationHeaders,
-            ...operationConfig?.headers,
-          };
-          for (const headerName in headers) {
-            headers[headerName] = stringInterpolator.parse(headers[headerName], interpolationData);
-          }
-          const requestInit: RequestInit = {
-            method,
-            headers,
-          };
-          const urlObj = new URL(fullPath);
-          // Resolve union input
-          const input = resolveDataByUnionInputType(args.input, field.args?.input?.type?.getType(), schemaComposer);
-          if (input) {
-            switch (method) {
-              case 'GET':
-              case 'HEAD':
-              case 'CONNECT':
-              case 'OPTIONS':
-              case 'TRACE': {
-                const newSearchParams = new URLSearchParams(input);
-                newSearchParams.forEach((value, key) => {
-                  urlObj.searchParams.set(key, value);
-                });
-                break;
-              }
-              case 'POST':
-              case 'PUT':
-              case 'PATCH':
-              case 'DELETE': {
-                const [, contentType] =
-                  Object.entries(headers).find(([key]) => key.toLowerCase() === 'content-type') || [];
-                if (contentType?.startsWith('application/x-www-form-urlencoded')) {
-                  requestInit.body = qsStringify(input);
-                } else {
-                  requestInit.body = jsonFlatStringify(input);
-                }
-                break;
-              }
-              default:
-                throw new Error(`Unknown method ${operationConfig.method}`);
-            }
-          }
-          operationLogger.debug(`=> Fetching ${urlObj.toString()}=>${inspect(requestInit)}`);
-          const response = await fetch(urlObj.toString(), requestInit);
-          const responseText = await response.text();
-          operationLogger.debug(
-            `=> Fetched from ${urlObj.toString()}=>{
-              body: ${responseText}
-            }`
-          );
-          const returnType = field.type;
-          let responseJson: any;
-          try {
-            responseJson = JSON.parse(responseText);
-          } catch (e) {
-            // The result might be defined as scalar
-            if (isScalarType(returnType)) {
-              operationLogger.debug(` => Return type is not a JSON so returning ${responseText}`);
-              return responseText;
-            }
-            throw responseText;
-          }
-          const errorMessageTemplate = this.config.errorMessage || 'message';
-          function normalizeError(error: any): Error {
-            const errorMessage = stringInterpolator.parse(errorMessageTemplate, error);
-            if (typeof error === 'object' && errorMessage) {
-              const errorObj = new Error(errorMessage);
-              errorObj.stack = null;
-              Object.assign(errorObj, error);
-              return errorObj;
-            } else {
-              return error;
-            }
-          }
-          const errors = responseJson.errors || responseJson._errors;
-          // Make sure the return type doesn't have a field `errors`
-          // so ignore auto error detection if the return type has that field
-          if (errors?.length) {
-            if (!('getFields' in returnType && 'errors' in returnType.getFields())) {
-              const aggregatedError = new AggregateError(
-                errors.map(normalizeError),
-                `${operationConfig.type}.${operationConfig.field} failed`
-              );
-              aggregatedError.stack = null;
-              this.logger.debug(`=> Throwing the error ${inspect(aggregatedError)}`);
-              return aggregatedError;
-            }
-          }
-          if (responseJson.error) {
-            if (!('getFields' in returnType && 'error' in returnType.getFields())) {
-              const normalizedError = normalizeError(responseJson.error);
-              operationLogger.debug(`=> Throwing the error ${inspect(normalizedError)}`);
-              return normalizedError;
-            }
-          }
-          operationLogger.debug(`=> Returning ${inspect(responseJson)}`);
-          return responseJson;
-        };
-      }
-    }
-
-    this.logger.debug(`Building the executable schema.`);
-    const schema = schemaComposer.buildSchema();
     return {
-      schema,
+      schema: schemaComposer.buildSchema(),
     };
   }
 }

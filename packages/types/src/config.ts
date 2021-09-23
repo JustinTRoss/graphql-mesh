@@ -338,26 +338,23 @@ export interface JsonSchemaHandler {
   schemaHeaders?: {
     [k: string]: any;
   };
-  operations: JsonSchemaOperation[];
+  /**
+   * Any of: JsonSchemaHTTPOperation, JsonSchemaPubSubOperation
+   */
+  operations: (JsonSchemaHTTPOperation | JsonSchemaPubSubOperation)[];
   disableTimestampScalar?: boolean;
   /**
    * Field name of your custom error object (default: 'message')
    */
   errorMessage?: string;
 }
-export interface JsonSchemaOperation {
+export interface JsonSchemaHTTPOperation {
   field: string;
-  path?: string;
-  pubsubTopic?: string;
   description?: string;
   /**
    * Allowed values: Query, Mutation, Subscription
    */
   type: 'Query' | 'Mutation' | 'Subscription';
-  /**
-   * Allowed values: GET, HEAD, POST, PUT, DELETE, CONNECT, OPTIONS, TRACE, PATCH
-   */
-  method?: 'GET' | 'HEAD' | 'POST' | 'PUT' | 'DELETE' | 'CONNECT' | 'OPTIONS' | 'TRACE' | 'PATCH';
   requestSchema?: any;
   requestSample?: any;
   requestTypeName?: string;
@@ -367,9 +364,32 @@ export interface JsonSchemaOperation {
   argTypeMap?: {
     [k: string]: any;
   };
+  path: string;
+  /**
+   * Allowed values: GET, HEAD, POST, PUT, DELETE, CONNECT, OPTIONS, TRACE, PATCH
+   */
+  method?: 'GET' | 'HEAD' | 'POST' | 'PUT' | 'DELETE' | 'CONNECT' | 'OPTIONS' | 'TRACE' | 'PATCH';
   headers?: {
     [k: string]: any;
   };
+}
+export interface JsonSchemaPubSubOperation {
+  field: string;
+  description?: string;
+  /**
+   * Allowed values: Query, Mutation, Subscription
+   */
+  type: 'Query' | 'Mutation' | 'Subscription';
+  requestSchema?: any;
+  requestSample?: any;
+  requestTypeName?: string;
+  responseSchema?: any;
+  responseSample?: any;
+  responseTypeName?: string;
+  argTypeMap?: {
+    [k: string]: any;
+  };
+  pubsubTopic: string;
 }
 export interface MongooseHandler {
   connectionString?: string;

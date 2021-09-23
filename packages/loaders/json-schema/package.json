@@ -1,5 +1,5 @@
 {
-  "name": "@omnigraphql/json-schema",
+  "name": "@omnigraph/json-schema",
   "version": "0.0.0",
   "sideEffects": false,
   "main": "dist/index.js",

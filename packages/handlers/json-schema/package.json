@@ -29,7 +29,7 @@
     "@graphql-mesh/store": "0.1.13",
     "@graphql-tools/utils": "8.2.3",
     "graphql-compose": "9.0.3",
-    "@omnigraphql/json-schema": "0.0.0"
+    "@omnigraph/json-schema": "0.0.0"
   },
   "publishConfig": {
     "access": "public",

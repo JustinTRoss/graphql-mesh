@@ -10,7 +10,7 @@ import {
   JSONSchemaLoaderOptions,
   JSONSchemaOperationConfig,
   addExecutionLogicToComposer,
-} from '@omnigraphql/json-schema';
+} from '@omnigraph/json-schema';
 
 export default class JsonSchemaHandler implements MeshHandler {
   private config: YamlConfig.JsonSchemaHandler;

@@ -141,9 +141,12 @@ export async function addExecutionLogicToComposer(
         // so ignore auto error detection if the return type has that field
         if (errors?.length) {
           if (!('getFields' in returnType && 'errors' in returnType.getFields())) {
+            const normalizedErrors: Error[] = errors.map(normalizeError);
             const aggregatedError = new AggregateError(
-              errors.map(normalizeError),
-              `${rootTypeName}.${fieldName} failed`
+              normalizedErrors,
+              `${rootTypeName}.${fieldName} failed; \n${normalizedErrors
+                .map(error => ` - ${error.message || error}`)
+                .join('\n')}\n`
             );
             aggregatedError.stack = null;
             logger.debug(`=> Throwing the error ${inspect(aggregatedError)}`);

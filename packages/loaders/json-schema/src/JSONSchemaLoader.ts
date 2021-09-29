@@ -60,6 +60,7 @@ export interface JSONSchemaLoaderOptions extends BaseLoaderOptions {
   finalSchema?: JSONSchemaObject;
   cache?: KeyValueCache;
   pubsub?: MeshPubSub;
+  fetch?: ReturnType<typeof getCachedFetch>;
 }
 
 export async function JSONSchemaLoader(name: string, options: JSONSchemaLoaderOptions) {
@@ -83,7 +84,7 @@ export async function JSONSchemaLoader(name: string, options: JSONSchemaLoaderOp
 }
 
 export async function addExecutionLogicToComposer(schemaComposer: SchemaComposer, options: JSONSchemaLoaderOptions) {
-  const fetch = getCachedFetch(options.cache);
+  const fetch = options.fetch || getCachedFetch(options.cache);
 
   options.logger.debug(`Attaching execution logic to the schema`);
   for (const operationConfig of options.operations) {

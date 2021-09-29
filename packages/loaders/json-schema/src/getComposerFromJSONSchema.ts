@@ -23,7 +23,6 @@ import {
 } from 'graphql';
 import {
   GraphQLBigInt,
-  GraphQLDate,
   GraphQLDateTime,
   GraphQLEmailAddress,
   GraphQLIPv4,

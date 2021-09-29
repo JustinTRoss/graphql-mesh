@@ -613,6 +613,10 @@ export function getComposerFromJSONSchema(schema: JSONSchema, logger: Logger): P
           if (subSchema.properties) {
             subSchema.type = 'object';
             for (const propertyName in subSchema.properties) {
+              // TODO: needs to be fixed
+              if (propertyName === 'additionalProperties') {
+                continue;
+              }
               const typeComposers = subSchema.properties[propertyName];
               fieldMap[propertyName] = {
                 type: () =>

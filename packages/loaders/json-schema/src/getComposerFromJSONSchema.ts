@@ -46,6 +46,7 @@ interface TypeComposers {
 }
 
 const JSONSchemaStringFormats = [
+  'date',
   'hostname',
   'regex',
   'json-pointer',
@@ -288,11 +289,11 @@ export function getComposerFromJSONSchema(schema: JSONSchema, logger: Logger): P
         };
       }
 
-      if (subSchema.oneOf) {
+      if (subSchema.oneOf && !subSchema.properties) {
         return getUnionTypeComposers(subSchema.oneOf);
       }
 
-      if (subSchema.allOf) {
+      if (subSchema.allOf && !subSchema.properties) {
         // It should not have `required` because it is `anyOf` not `allOf`
         const inputFieldMap: InputTypeComposerFieldConfigMap = {};
         const fieldMap: ObjectTypeComposerFieldConfigMap<any, any> = {};
@@ -349,7 +350,7 @@ export function getComposerFromJSONSchema(schema: JSONSchema, logger: Logger): P
         };
       }
 
-      if (subSchema.anyOf) {
+      if (subSchema.anyOf && !subSchema.properties) {
         // It should not have `required` because it is `anyOf` not `allOf`
         const inputFieldMap: InputTypeComposerFieldConfigMap = {};
         const fieldMap: ObjectTypeComposerFieldConfigMap<any, any> = {};
@@ -512,13 +513,6 @@ export function getComposerFromJSONSchema(schema: JSONSchema, logger: Logger): P
                 output: typeComposer,
               };
             }
-            case 'date': {
-              const typeComposer = schemaComposer.getAnyTC(GraphQLDate);
-              return {
-                input: typeComposer,
-                output: typeComposer,
-              };
-            }
             case 'email': {
               const typeComposer = schemaComposer.getAnyTC(GraphQLEmailAddress);
               return {
@@ -547,6 +541,7 @@ export function getComposerFromJSONSchema(schema: JSONSchema, logger: Logger): P
                 output: typeComposer,
               };
             }
+            case 'date':
             case 'idn-email':
             case 'hostname':
             case 'regex':

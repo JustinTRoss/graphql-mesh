@@ -472,10 +472,10 @@ export function getComposerFromJSONSchema(schema: JSONSchema, logger: Logger): P
               if (v != null) {
                 const vStr = v.toString();
                 if (typeof subSchema.minLength !== 'undefined' && vStr.length < subSchema.minLength) {
-                  throw new Error(`${typeComposerName} cannot be less than ${subSchema.minLength}`);
+                  throw new Error(`${typeComposerName} cannot be less than ${subSchema.minLength} but given ${vStr}`);
                 }
                 if (typeof subSchema.maxLength !== 'undefined' && vStr.length > subSchema.maxLength) {
-                  throw new Error(`${typeComposerName} cannot be more than ${subSchema.maxLength}`);
+                  throw new Error(`${typeComposerName} cannot be more than ${subSchema.maxLength} but given ${vStr}`);
                 }
                 return vStr;
               }
@@ -484,8 +484,13 @@ export function getComposerFromJSONSchema(schema: JSONSchema, logger: Logger): P
               name: typeComposerName,
               description: subSchema.description,
               serialize: coerceString,
-              parseLiteral: coerceString,
-              parseValue: ast => ast?.value && coerceString(ast.value),
+              parseValue: coerceString,
+              parseLiteral: ast => {
+                if ('value' in ast) {
+                  return coerceString(ast.value);
+                }
+                return null;
+              },
             });
             return {
               input: typeComposer,

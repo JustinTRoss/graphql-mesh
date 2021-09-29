@@ -1,4 +1,7 @@
-import { JSONSchemaLoader } from './JSONSchemaLoader';
+import { loadGraphQLSchemaFromJSONSchemas } from './loadGraphQLSchemaFromJSONSchemas';
+export default loadGraphQLSchemaFromJSONSchemas;
+export * from './addExecutionLogicToComposer';
+export * from './bundleJSONSchemas';
 export * from './getComposerFromJSONSchema';
-export * from './JSONSchemaLoader';
-export default JSONSchemaLoader;
+export * from './loadGraphQLSchemaFromJSONSchemas';
+export * from './types';

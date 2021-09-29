@@ -1,4 +1,6 @@
-const SCALARS = new Map<string, string>([
+type ScalarMap = Map<string, string>;
+
+const SCALARS: ScalarMap = new Map([
   ['bool', 'Boolean'],
   ['bytes', 'Byte'],
   ['double', 'Float'],
@@ -25,5 +27,5 @@ export function getGraphQLScalar(scalarType: string): string {
   if (!gqlScalar) {
     throw new Error(`Could not find GraphQL Scalar for type ${scalarType}`);
   }
-  return gqlScalar;
+  return SCALARS.get(scalarType);
 }

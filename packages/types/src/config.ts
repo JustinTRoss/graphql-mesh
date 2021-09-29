@@ -342,7 +342,6 @@ export interface JsonSchemaHandler {
    * Any of: JsonSchemaHTTPOperation, JsonSchemaPubSubOperation
    */
   operations: (JsonSchemaHTTPOperation | JsonSchemaPubSubOperation)[];
-  disableTimestampScalar?: boolean;
   /**
    * Field name of your custom error object (default: 'message')
    */

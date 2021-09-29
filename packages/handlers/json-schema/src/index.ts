@@ -1,16 +1,9 @@
 import { StoreProxy } from '@graphql-mesh/store';
 import { GetMeshSourceOptions, KeyValueCache, Logger, MeshHandler, MeshPubSub, YamlConfig } from '@graphql-mesh/types';
-import { SchemaComposer } from 'graphql-compose';
-import { specifiedDirectives } from 'graphql';
 import { JsonSchemaWithDiff } from './JsonSchemaWithDiff';
-import { dereferenceObject, JSONSchema, JSONSchemaObject } from 'json-machete';
-import {
-  getComposerFromJSONSchema,
-  buildFinalJSONSchema,
-  JSONSchemaLoaderOptions,
-  JSONSchemaOperationConfig,
-  addExecutionLogicToComposer,
-} from '@omnigraph/json-schema';
+import { JSONSchemaObject } from 'json-machete';
+import { bundleJSONSchemas, getGraphQLSchemaFromBundledJSONSchema } from '@omnigraph/json-schema';
+import { getCachedFetch } from '@graphql-mesh/utils';
 
 export default class JsonSchemaHandler implements MeshHandler {
   private config: YamlConfig.JsonSchemaHandler;
@@ -30,34 +23,26 @@ export default class JsonSchemaHandler implements MeshHandler {
   }
 
   async getMeshSource() {
-    const options: JSONSchemaLoaderOptions = {
-      baseUrl: this.config.baseUrl,
-      operationHeaders: this.config.operationHeaders,
-      schemaHeaders: this.config.schemaHeaders,
-      operations: this.config.operations as unknown as JSONSchemaOperationConfig[],
-      disableTimestampScalar: this.config.disableTimestampScalar,
-      errorMessage: this.config.errorMessage,
+    const bundledJSONSchema = await this.jsonSchema.getWithSet(() =>
+      bundleJSONSchemas({
+        operations: this.config.operations as any,
+        cwd: this.baseDir,
+        logger: this.logger,
+      })
+    );
+    const schema = await getGraphQLSchemaFromBundledJSONSchema(bundledJSONSchema, {
+      cwd: this.baseDir,
+      fetch: getCachedFetch(this.cache),
       logger: this.logger,
-      cache: this.cache,
-      cwd: this.baseDir,
-    };
-    const finalJSONSchema = await this.jsonSchema.getWithSet(() => buildFinalJSONSchema(options));
-    this.logger.debug(`Derefering the bundled JSON Schema`);
-    const fullyDeferencedSchema = await dereferenceObject(finalJSONSchema, {
-      cwd: this.baseDir,
+      operations: this.config.operations as any,
+      operationHeaders: this.config.operationHeaders,
+      baseUrl: this.config.baseUrl,
+      pubsub: this.pubsub,
+      errorMessage: this.config.errorMessage,
     });
-    this.logger.debug(`Generating GraphQL Schema from the bundled JSON Schema`);
-    const visitorResult = await getComposerFromJSONSchema(fullyDeferencedSchema as JSONSchema, this.logger);
-
-    const schemaComposer = visitorResult.output as SchemaComposer;
-
-    // graphql-compose doesn't add @defer and @stream to the schema
-    specifiedDirectives.forEach(directive => schemaComposer.addDirective(directive));
-
-    addExecutionLogicToComposer(schemaComposer, options);
 
     return {
-      schema: schemaComposer.buildSchema(),
+      schema,
     };
   }
 }

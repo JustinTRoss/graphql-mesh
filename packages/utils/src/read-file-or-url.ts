@@ -16,10 +16,7 @@ export interface ReadFileOrUrlOptions extends RequestInit {
   fetch?: typeof crossFetch;
 }
 
-export function getCachedFetch(cache?: KeyValueCache): typeof crossFetch {
-  if (!cache) {
-    return crossFetch;
-  }
+export function getCachedFetch(cache: KeyValueCache): typeof crossFetch {
   return fetchFactory({
     fetch: crossFetch,
     Request,
